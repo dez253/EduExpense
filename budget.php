@@ -14,35 +14,43 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Check if user is logged in
+// Redirect to login if user is not logged in
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");  // Redirect to login page if not logged in
+    header("Location: login.php");
     exit();
 }
 
-// Get the logged-in user's ID
+// Get logged-in user's ID
 $user_id = $_SESSION['user_id'];
 
-// Handle form submission for adding a new budget
+// Fetch categories from category_description table
+$sql_categories = "SELECT category_description FROM expenses";
+$categories_result = $conn->query($sql_categories);
+
+$categories = [];
+while ($row = $categories_result->fetch_assoc()) {
+    $categories[] = $row['category_description'];
+}
+
+// Handle form submission for adding a budget
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['source'], $_POST['amount'], $_POST['spending_limit'], $_POST['date_assigned'])) {
     $source = $_POST['source'];
     $amount = $_POST['amount'];
     $spending_limit = $_POST['spending_limit'];
     $date_assigned = $_POST['date_assigned'];
 
-    // Insert budget into the database
+    // Insert budget into database
     $stmt = $conn->prepare("INSERT INTO budgets (user_id, amount, spending_limit, source, date_assigned) VALUES (?, ?, ?, ?, ?)");
     $stmt->bind_param('idsss', $user_id, $amount, $spending_limit, $source, $date_assigned);
     $stmt->execute();
     $stmt->close();
 
-    // Redirect to avoid resubmission on refresh
     header("Location: budget.php");
     exit();
 }
 
-// Fetch user's budgets and their total expenses for comparison
-$sql = "SELECT b.id, b.source, b.amount, b.spending_limit, b.date_assigned, 
+// Fetch budgets and expenses data
+$sql = "SELECT b.id, b.source, b.amount, b.spending_limit, b.date_assigned,
                IFNULL(SUM(e.amount), 0) AS total_expenses
         FROM budgets b
         LEFT JOIN expenses e ON e.category_description = b.source AND e.user_id = b.user_id
@@ -54,25 +62,34 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 $budgets = [];
-$total_budget = 0; // Variable to store total budget
+$total_budget = 0;
+$total_expenses = 0;
+$chart_data = [];
 
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $budgets[] = $row;
-        $total_budget += $row['amount']; // Add the amount to the total budget
-    }
+while ($row = $result->fetch_assoc()) {
+    $budgets[] = $row;
+    $total_budget += $row['amount'];
+    $total_expenses += $row['total_expenses']; // Calculate total expenses for the user
+    $chart_data[] = [
+        'source' => $row['source'],
+        'amount' => $row['amount'],
+        'expenses' => $row['total_expenses']
+    ];
 }
 
-// Close database connection
+// Calculate the balance between the total budget and total expenses
+$budget_balance = $total_budget - $total_expenses;
+
+$stmt->close();
 $conn->close();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Budgeting</title>
-    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
@@ -81,157 +98,129 @@ $conn->close();
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f9;
+            background-color: #f8f9fa;
         }
+/* Sidebar Styles */
+#sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 80px;
+    height: 100vh;
+    background-color: #2E573F; /* Dark green background */
+    color: white; /* White text */
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+    transition: width 0.3s ease;
+}
 
-        /* Sidebar Style */
-        #sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 80px; /* Initial collapsed width */
-            height: 100vh;
-            background-color: #343a40;
-            color: white;
-            padding-top: 20px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
-            transition: width 0.3s ease;
-        }
+#sidebar:hover {
+    width: 250px; /* Expanded width on hover */
+}
 
-        /* Sidebar hover effect - expand to show text */
-        #sidebar:hover {
-            width: 250px; /* Expanded width */
-        }
+/* Sidebar Links */
+#sidebar a {
+    color: white; /* White text for the links */
+    padding: 15px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    font-size: 16px;
+    width: 100%;
+    text-align: left;
+}
 
-        /* Sidebar Links */
-        #sidebar a {
-            color: white;
-            padding: 15px;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            font-size: 18px;
-            width: 100%;
-            text-align: left;
-            transition: all 0.3s ease;
-        }
+/* Sidebar Icons */
+#sidebar i {
+    margin-right: 10px;
+    font-size: 18px;
+}
 
-        #sidebar a:hover {
-            background-color: #007bff;
-        }
+/* Sidebar Text */
+#sidebar .sidebar-text {
+    display: inline-block;
+    transition: opacity 0.3s ease;
+}
 
-        #sidebar i {
-            margin-right: 10px;
-            font-size: 20px;
-        }
+#sidebar:not(:hover) .sidebar-text {
+    opacity: 0; /* Hide text when sidebar is collapsed */
+}
 
-        #sidebar .sidebar-text {
-            display: inline-block;
-            transition: opacity 0.3s ease;
-        }
-
-        #sidebar:not(:hover) .sidebar-text {
-            opacity: 0;
-        }
-
-        /* Main Content Area */
+        /* Main Container */
         .container {
             margin-left: 270px;
             padding: 20px;
         }
 
-        /* Welcome Section */
-        .welcome-section {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border-radius: 5px;
-            transition: opacity 0.5s ease-out;
+        /* Heading Styles */
+        h1, h2, h3 {
+            color: #BC705B;
         }
 
-        .welcome-section.hidden {
-            opacity: 0;
-            pointer-events: none;
+        /* Chart Containers */
+        .chart-container {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-sizing: border-box;
+            width: 48%;
+            height: 300px;
         }
 
+        /* Button Styling */
+        .btn {
+            margin-right: 10px;
+        }
+
+        /* Flexbox for Layout */
         .dashboard {
             display: flex;
-            flex-wrap: wrap;
             justify-content: space-between;
-            gap: 20px;
-            max-width: 1000px;  /* Reduced max width */
-            margin-top: 30px;
+            gap: 15px;
+            flex-wrap: nowrap;
         }
 
-        .card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            flex: 1;
-            min-width: 280px;  /* Reduced card size */
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            #sidebar {
+                width: 60px;
+            }
 
-        .chart-container {
-            position: relative;
-            width: 100%;
-            max-width: 400px;
-        }
+            .container {
+                margin-left: 70px;
+            }
 
-        h1 {
-            margin: 0;
-            padding: 20px 0;
-            color: #333;
-        }
+            /* Stack charts on smaller screens */
+            .dashboard {
+                flex-direction: column;
+                align-items: center;
+            }
 
-        .expense-card {
-            background: #fff;
-            padding: 15px;
-            margin: 10px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            width: 250px;
-        }
-
-        .expense-card h5 {
-            font-size: 18px;
-            margin-bottom: 10px;
-        }
-
-        .expense-card p {
-            font-size: 14px;
-            color: #666;
-        }
-
-        button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            cursor: pointer;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-
-        button:hover {
-            background-color: #45a049;
+            .chart-container {
+                width: 90%;
+                margin-bottom: 20px;
+                height: auto;
+            }
         }
 
         @media (max-width: 340px) {
             #sidebar {
-                width: 50%;
+                width: 100%;
                 position: relative;
                 height: auto;
             }
+
             .container {
                 margin-left: 0;
+            }
+
+            /* Stack charts on very small screens */
+            .chart-container {
+                width: 100%;
             }
         }
     </style>
@@ -243,48 +232,98 @@ $conn->close();
     <a href="view_expenses.php"><i class="fas fa-eye"></i><span class="sidebar-text">View Expenses</span></a>
     <a href="profile.php"><i class="fas fa-user"></i><span class="sidebar-text">Profile</span></a>
     <a href="settings.php"><i class="fas fa-cogs"></i><span class="sidebar-text">Settings</span></a>
-    <a href="budget.php"><i class="fas fa-wallet"></i><span class="sidebar-text">Budget</span></a> <!-- New Budget Section -->
+    <a href="budget.php"><i class="fas fa-wallet"></i><span class="sidebar-text">Budget</span></a>
     <a href="logout.php"><i class="fas fa-sign-out-alt"></i><span class="sidebar-text">Logout</span></a>
 </div>
 
 <div class="container">
     <h1>Set Your Budget</h1>
-
-    <form action="budget.php" method="POST">
+    <form action="budget.php" method="POST" class="mb-4">
         <div class="mb-3">
             <label for="source" class="form-label">Category</label>
-            <input type="text" class="form-control" id="source" name="source" required>
+            <select class="form-control" id="source" name="source" required>
+                <option value="" disabled selected>Select a category</option>
+                <?php foreach ($categories as $category): ?>
+                    <option value="<?php echo $category; ?>"><?php echo $category; ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
         <div class="mb-3">
             <label for="amount" class="form-label">Assigned Budget Amount (UGX)</label>
             <input type="number" class="form-control" id="amount" name="amount" required>
         </div>
         <div class="mb-3">
-            <label for="spending_limit" class="form-label">Spending Limit (UGX)</label>
+            <label for="spending_limit" class="form-label">Spending Limit</label>
             <input type="number" class="form-control" id="spending_limit" name="spending_limit" required>
         </div>
         <div class="mb-3">
             <label for="date_assigned" class="form-label">Date Assigned</label>
             <input type="date" class="form-control" id="date_assigned" name="date_assigned" required>
         </div>
-        <button type="submit">Save Budget</button>
+        <button type="submit" class="btn btn-primary">Add Budget</button>
     </form>
 
-    <div class="welcome-section">
-        <h2>Total Budget: UGX <?php echo number_format($total_budget); ?></h2>
-    </div>
+    <h2>Budget Balance</h2>
+    <p>Current Budget: UGX <?php echo number_format($total_budget, 2); ?></p>
+    <p>Total Expenses: UGX <?php echo number_format($total_expenses, 2); ?></p>
+    <p>Balance: UGX <?php echo number_format($budget_balance, 2); ?></p>
 
     <div class="dashboard">
-        <?php foreach ($budgets as $budget) { ?>
-            <div class="expense-card">
-                <h5><?php echo $budget['source']; ?></h5>
-                <p>Assigned: UGX <?php echo number_format($budget['amount']); ?></p>
-                <p>Limit: UGX <?php echo number_format($budget['spending_limit']); ?></p>
-                <p>Expenses: UGX <?php echo number_format($budget['total_expenses']); ?></p>
-                <p>Remaining: UGX <?php echo number_format($budget['amount'] - $budget['total_expenses']); ?></p>
-            </div>
-        <?php } ?>
+        <div class="chart-container">
+            <canvas id="budgetChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="expenseChart"></canvas>
+        </div>
     </div>
 </div>
+
+<script>
+// Chart.js script for rendering charts
+const budgetChart = new Chart(document.getElementById('budgetChart'), {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode(array_column($chart_data, 'source')); ?>,
+        datasets: [{
+            label: 'Assigned Budget (UGX)',
+            data: <?php echo json_encode(array_column($chart_data, 'amount')); ?>,
+            backgroundColor: '#4e73df',
+            borderColor: '#4e73df',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+const expenseChart = new Chart(document.getElementById('expenseChart'), {
+    type: 'bar',
+    data: {
+        labels: <?php echo json_encode(array_column($chart_data, 'source')); ?>,
+        datasets: [{
+            label: 'Total Expenses (UGX)',
+            data: <?php echo json_encode(array_column($chart_data, 'expenses')); ?>,
+            backgroundColor: '#ff5733',
+            borderColor: '#ff5733',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+</script>
+
 </body>
 </html>
