@@ -43,73 +43,127 @@ $conn->close();
     <title>Profile Page</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* Global Styles */
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            padding: 20px;
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8, #dde1e7);
+            padding: 50px 0;
+            color: #333;
         }
 
         .profile-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
             background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            max-width: 700px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 850px;
             margin: auto;
+            text-align: center;
+            position: relative;
         }
 
-        .profile-header {
-            text-align: center;
+        /* Profile Image Styling */
+        .profile-image {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 5px solid #007bff;
             margin-bottom: 20px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
         }
 
+        /* Profile Header */
+        .profile-header h2 {
+            font-size: 2.5rem;
+            color: #007bff;
+            font-weight: 700;
+        }
+
+        .profile-header h3 {
+            font-size: 1.5rem;
+            color: #6c757d;
+        }
+
+        /* Profile Info */
         .profile-info {
+            font-size: 1.1rem;
+            color: #555;
             margin-bottom: 15px;
+            text-align: left;
         }
 
+        .profile-info strong {
+            color: #007bff;
+        }
+
+        /* Button Styling */
         .btn {
-            padding: 10px 20px;
-            cursor: pointer;
-            border-radius: 4px;
-            text-align: center;
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
         }
 
         .btn-edit {
-            background-color: #4CAF50;
+            background: #28a745;
             color: white;
             border: none;
+            margin-right: 20px;
         }
 
         .btn-edit:hover {
-            background-color: #45a049;
+            background: #218838;
+            transform: translateY(-3px);
         }
 
         .btn-back {
-            background-color: #007bff;
+            background: #007bff;
             color: white;
             border: none;
         }
 
         .btn-back:hover {
-            background-color: #0056b3;
+            background: #0056b3;
+            transform: translateY(-3px);
         }
 
+        /* Button Group */
         .btn-group {
             display: flex;
-            justify-content: space-between;
-            width: 100%;
+            justify-content: center;
+            margin-top: 30px;
         }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .profile-container {
+                padding: 30px;
+                margin: 0 20px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+        }
+
     </style>
 </head>
 <body>
 
 <div class="profile-container">
+    <!-- Profile Image -->
+    <img src="https://via.placeholder.com/150" alt="Profile Image" class="profile-image">
+
+    <!-- Profile Header Section -->
     <div class="profile-header">
-        <h2>Profile</h2>
+        <h2>Welcome, <?php echo htmlspecialchars($user['first_name']) . ' ' . htmlspecialchars($user['last_name']); ?></h2>
+        <h3>Here's your profile details</h3>
     </div>
 
     <!-- Display user information -->
