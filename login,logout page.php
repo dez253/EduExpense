@@ -1,20 +1,23 @@
 <?php
-session_start(); // Start the session to track the user's login state
+// Start the session
+session_start();
 
-// Database connection
-$servername = "localhost";
-$username = "root"; // MySQL username
-$password = ""; // MySQL password
-$dbname = "finance_student"; // Your database name
+// Database connection (make sure to change these parameters to your actual database credentials)
+$host = 'localhost';
+$username = 'root'; // replace with your database username
+$password = ''; // replace with your database password
+$dbname = 'finance_student'; // replace with your database name
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+$conn = new mysqli($host, $username, $password, $dbname);
 
 // Check connection
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
+// Initialize the messages as empty strings to avoid undefined variable warnings
+$login_message = '';
+$register_message = '';
 // Registration process
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
     $username = $_POST['reg_username'];
@@ -36,7 +39,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
     } else {
         // Insert new user into the database
         $sql_register = "INSERT INTO users (username, password_hash, email, first_name, last_name, date_of_birth) 
-                         VALUES (?, ?, ?, ?, ?, ?)";
+                          VALUES (?, ?, ?, ?, ?, ?)";
         $stmt_register = $conn->prepare($sql_register);
         $stmt_register->bind_param("ssssss", $username, $password, $email, $first_name, $last_name, $date_of_birth);
         $stmt_register->execute();
@@ -47,36 +50,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['register'])) {
     }
 }
 
-// Login process
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['login'])) {
-    $username = $_POST['login_username'];
-    $password = $_POST['login_password'];
+// Login User
+if (isset($_POST['login'])) {
+    $login_username = $_POST['login_username'];
+    $login_password = $_POST['login_password'];
 
     // Check if the user exists
-    $sql_login = "SELECT * FROM users WHERE username = ?";
-    $stmt_login = $conn->prepare($sql_login);
-    $stmt_login->bind_param("s", $username);
-    $stmt_login->execute();
-    $result = $stmt_login->get_result();
+    $check_login_query = "SELECT * FROM users WHERE username = '$login_username'";
+    $result = $conn->query($check_login_query);
 
     if ($result->num_rows > 0) {
         $user = $result->fetch_assoc();
-        if (password_verify($password, $user['password_hash'])) {
+
+        if (password_verify($login_password, $user['password_hash'])) {
             // Set session variables
             $_SESSION['user_id'] = $user['user_id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['email'] = $user['email'];
-
-            // Redirect to the dashboard after successful login
-            header("Location: dashboard.php");
+            // Redirect or show success message
+            header("Location: dashboard.php"); // Replace 'welcome.php' with your dashboard or desired page
             exit();
         } else {
-            $login_error = "Invalid password.";
+            $login_message = 'Invalid password!';
         }
     } else {
-        $login_error = "No user found with that username.";
+        $login_message = 'Username not found!';
     }
 }
+
 
 $conn->close();
 ?>
@@ -86,143 +87,307 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login & Register</title>
+    <title>Sliding Login & Register</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-        }
-        .container {
-            max-width: 500px;
-            padding: 30px;
-            margin-top: 50px;
-            background-color: white;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-        }
-        .tab-buttons {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .tab-buttons button {
-            width: 48%;
-            padding: 10px;
-            cursor: pointer;
-            border: 1px solid #ccc;
-            background-color: #f4f4f9;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-        .tab-buttons button.active {
-            background-color: #007bff;
-            color: white;
-        }
-        .form-container {
-            display: none;
-        }
-        .form-container.active {
-            display: block;
-        }
+    /* Global Styles */
+  /* Global Styles */
+  body {
+    font-family: 'Arial', sans-serif;
+    background-image: url('wp10935121-business-office-wallpapers.jpg'); /* Replace with your image path */
+    background-size: cover; /* Ensures the image covers the entire screen */
+    background-position: center; /* Centers the image */
+    background-repeat: no-repeat; /* Prevents repetition of the image */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh; /* Ensures it takes the full height of the viewport */
+}
+
+
+/* Container */
+.container {
+    position: relative;
+    width: 90%;
+    max-width: 1000px; /* Increased width for more space */
+    height: auto; /* Adjusted for responsive height */
+    background: #fff;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: row; /* Ensure the forms and cover are laid out side by side initially */
+    flex-wrap: wrap; /* Allow elements to wrap on smaller screens */
+}
+
+/* Forms Section */
+.forms {
+    display: flex;
+    width: 100%; /* Adjusted for full width */
+    transition: transform 0.6s ease-in-out;
+}
+
+/* Form Wrapper */
+.form-wrapper {
+    flex: 1;
+    width: 50%; /* Forms take up half the width */
+    padding: 40px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.form-wrapper.login {
+    background: #f9f9f9; /* Light grey background for login */
+}
+
+.form-wrapper.register {
+    background: #f4f4f4; /* Slightly darker grey for registration */
+}
+
+/* Heading Styles */
+h2 {
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: #4c6b3c; /* Deep green for a professional look */
+    text-align: center;
+}
+
+/* Label Styles */
+label {
+    color: #333;
+    font-weight: bold;
+}
+
+/* Input Fields */
+.form-control {
+    border-radius: 5px;
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 15px;
+    border: 1px solid #d1d1d1;
+}
+
+/* Button Styles */
+button {
+    background: #4c6b3c; /* Deep green for buttons */
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 10px;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #3a5731; /* Darker green for hover effect */
+}
+
+/* Cover Section */
+.cover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50%; /* Cover initially takes up half the container */
+    height: 100%;
+    background: #4c6b3c; /* Green background for cover */
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    z-index: 1;
+    transition: transform 0.6s ease-in-out;
+}
+
+.cover h1 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+}
+
+.cover p {
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+/* Switch Buttons */
+.switch-btns button {
+    background: transparent;
+    border: 2px solid #fff;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s, color 0.3s;
+}
+button[name="login"] {
+    background-color: #4c6b3c; /* A shade of green */
+    color: white; /* White text for contrast */
+    border: none; /* Removes default border */
+    border-radius: 5px; /* Smooth edges */
+    padding: 10px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease-in-out;
+}
+
+button[name="login"]:hover {
+    background-color: #4c6b3c; /* Slightly darker green for hover effect */
+}
+
+.switch-btns button:hover {
+    background: #fff;
+    color: #4c6b3c; /* Green text on hover */
+}
+
+/* Password Strength Message */
+#password_strength {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-top: 5px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column; /* Stack elements vertically on smaller screens */
+        padding: 10px;
+        height: auto;
+    }
+
+    .form-wrapper {
+        padding: 20px;
+        width: 100%; /* Full width for form wrappers on small screens */
+    }
+
+    .cover {
+        width: 100%; /* Cover section takes full width */
+        height: auto; /* Let the height adjust based on content */
+        padding: 30px;
+    }
+
+    h2 {
+        font-size: 1.6rem;
+    }
+
+    .form-control {
+        padding: 12px;
+    }
+
+    button {
+        font-size: 1rem;
+    }
+}
+
+
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="forms" id="forms">
+            <!-- Login Form -->
+            <div class="form-wrapper login">
+                <h2>Login</h2>
+                <form method="POST" action="">
+                    <label for="login_username">Username:</label>
+                    <input type="text" class="form-control" name="login_username" id="login_username" required>
+                    <label for="login_password">Password:</label>
+                    <input type="password" class="form-control" name="login_password" id="login_password" required>
+                    <button type="submit" name="login" class="btn w-100 mt-3">Login</button>
+                </form>
+                <?php if ($login_message): ?>
+                    <div class="alert alert-info mt-3">
+                        <?= $login_message ?>
+                    </div>
+                <?php endif; ?>
+            </div>
 
-<div class="container">
-    <!-- Tab Buttons -->
-    <div class="tab-buttons">
-        <button class="active btn btn-primary" onclick="switchForm('login')">Login</button>
-        <button class="btn btn-outline-primary" onclick="switchForm('register')">Register</button>
+            <!-- Register Form -->
+            <div class="form-wrapper register">
+                <h2>Register</h2>
+                <form method="POST" action="">
+                    <label for="reg_username">Username:</label>
+                    <input type="text" class="form-control" name="reg_username" id="reg_username" required>
+                    <label for="reg_email">Email:</label>
+                    <input type="email" class="form-control" name="reg_email" id="reg_email" required>
+                    <label for="reg_first_name">First Name:</label>
+                    <input type="text" class="form-control" name="reg_first_name" id="reg_first_name">
+                    <label for="reg_last_name">Last Name:</label>
+                    <input type="text" class="form-control" name="reg_last_name" id="reg_last_name">
+                    <label for="reg_date_of_birth">Date of Birth:</label>
+                    <input type="date" class="form-control" name="reg_date_of_birth" id="reg_date_of_birth">
+                    <label for="reg_password">Password:</label>
+                    <input type="password" class="form-control" name="reg_password" id="reg_password" required>
+                    <small id="password_strength" class="form-text text-muted"></small>
+                    <button type="submit" name="register" class="btn w-100 mt-3">Register</button>
+                </form>
+                <?php if ($register_message): ?>
+                    <div class="alert alert-info mt-3">
+                        <?= $register_message ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Cover Section -->
+        <div class="cover login" id="cover">
+            <h1>Welcome Back!</h1>
+            <p>To keep connected with us, please login with your personal information.</p>
+            <div class="switch-btns">
+                <button onclick="switchTo('register')">Register</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Login Form -->
-    <div class="form-container active" id="login-form">
-        <h2 class="text-center">Login</h2>
-        <form method="POST" action="">
-            <div class="mb-3">
-                <label for="login_username" class="form-label">Username:</label>
-                <input type="text" class="form-control" name="login_username" id="login_username" required><br><br>
-            </div>
+    <script>
+        // Password strength validation
+        document.getElementById("reg_password").addEventListener("input", function () {
+            const password = this.value;
+            const strengthText = document.getElementById("password_strength");
+            const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+            if (password.length >= 8 && regex.test(password)) {
+                strengthText.textContent = "Strong password.";
+                strengthText.style.color = "green";
+            } else {
+                strengthText.textContent = "Password must be at least 8 characters long, include an uppercase letter, a number, and a special character.";
+                strengthText.style.color = "red";
+            }
+        });
 
-            <div class="mb-3">
-                <label for="login_password" class="form-label">Password:</label>
-                <input type="password" class="form-control" name="login_password" id="login_password" required><br><br>
-            </div>
+        function switchTo(form) {
+            const forms = document.getElementById('forms');
+            const cover = document.getElementById('cover');
 
-            <?php if (isset($login_error)): ?>
-                <p class="text-danger"><?php echo $login_error; ?></p>
-            <?php endif; ?>
-
-            <button type="submit" name="login" class="btn btn-primary w-100">Login</button>
-        </form>
-    </div>
-
-    <!-- Register Form -->
-    <div class="form-container" id="register-form">
-        <h2 class="text-center">Register</h2>
-        <form method="POST" action="">
-            <div class="mb-3">
-                <label for="reg_username" class="form-label">Username:</label>
-                <input type="text" class="form-control" name="reg_username" id="reg_username" required><br><br>
-            </div>
-
-            <div class="mb-3">
-                <label for="reg_email" class="form-label">Email:</label>
-                <input type="email" class="form-control" name="reg_email" id="reg_email" required><br><br>
-            </div>
-
-            <div class="mb-3">
-                <label for="reg_password" class="form-label">Password:</label>
-                <input type="password" class="form-control" name="reg_password" id="reg_password" required><br><br>
-            </div>
-
-            <div class="mb-3">
-                <label for="reg_first_name" class="form-label">First Name:</label>
-                <input type="text" class="form-control" name="reg_first_name" id="reg_first_name"><br><br>
-            </div>
-
-            <div class="mb-3">
-                <label for="reg_last_name" class="form-label">Last Name:</label>
-                <input type="text" class="form-control" name="reg_last_name" id="reg_last_name"><br><br>
-            </div>
-
-            <div class="mb-3">
-                <label for="reg_date_of_birth" class="form-label">Date of Birth:</label>
-                <input type="date" class="form-control" name="reg_date_of_birth" id="reg_date_of_birth"><br><br>
-            </div>
-
-            <?php if (isset($reg_error)): ?>
-                <p class="text-danger"><?php echo $reg_error; ?></p>
-            <?php elseif (isset($reg_success)): ?>
-                <p class="text-success"><?php echo $reg_success; ?></p>
-            <?php endif; ?>
-
-            <button type="submit" name="register" class="btn btn-primary w-100">Register</button>
-        </form>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
-
-<script>
-    // Function to toggle between login and register forms
-    function switchForm(form) {
-        document.getElementById('login-form').classList.remove('active');
-        document.getElementById('register-form').classList.remove('active');
-
-        if (form === 'login') {
-            document.getElementById('login-form').classList.add('active');
-            document.querySelector('.tab-buttons button:nth-child(1)').classList.add('active');
-            document.querySelector('.tab-buttons button:nth-child(2)').classList.remove('active');
-        } else {
-            document.getElementById('register-form').classList.add('active');
-            document.querySelector('.tab-buttons button:nth-child(1)').classList.remove('active');
-            document.querySelector('.tab-buttons button:nth-child(2)').classList.add('active');
+            if (form === 'register') {
+                forms.style.transform = 'translateX(-50%)';
+                cover.classList.remove('login');
+                cover.classList.add('register');
+                cover.innerHTML = `
+                    <h1>Join Us Now!</h1>
+                    <p>Create an account and start your journey with us.</p>
+                    <div class="switch-btns">
+                        <button onclick="switchTo('login')">Login</button>
+                    </div>
+                `;
+            } else {
+                forms.style.transform = 'translateX(0%)';
+                cover.classList.remove('register');
+                cover.classList.add('login');
+                cover.innerHTML = `
+                    <h1>Welcome Back!</h1>
+                    <p>To keep connected with us, please login with your personal information.</p>
+                    <div class="switch-btns">
+                        <button onclick="switchTo('register')">Register</button>
+                    </div>
+                `;
+            }
         }
-    }
-</script>
-
+    </script>
 </body>
 </html>
